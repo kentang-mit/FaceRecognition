@@ -6,7 +6,7 @@ import numpy as np
 from models.resnet import *
 from torchvision.datasets import ImageFolder
 import time
-
+from torch.optim import lr_scheduler
 
 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                 std=[0.229, 0.224, 0.225])
@@ -27,11 +27,12 @@ val_transform = transforms.Compose([
 '''
 
 MAX_EPOCH = 20
-BATCH_SIZE = 128
+BATCH_SIZE = 512
 NUM_CLASSES = 10575
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-data_dir = '/home/kentang/casia-maxpy-clean/CASIA-maxpy-clean'
-loss_fn = nn.CrossEntropyLoss()
+data_dir = '/home/kentang/casia-maxpy-clean/CASIA-maxpy-clean/imgs'
+loss_fn = nn.CrossEntropyLoss().to(device)
 dataset = datasets.ImageFolder(data_dir, transform=transform)
 
 dataloader = torch.utils.data.DataLoader(
@@ -40,28 +41,32 @@ dataloader = torch.utils.data.DataLoader(
     shuffle = True
 )
 
-model = ResNet(NUM_CLASSES).cuda()
+model = ResNet(NUM_CLASSES)
+model = nn.DataParallel(model).to(device)
+
 
 #redefine optimizers:
-optim = torch.optim.Adam(model.parameters(), lr=0.01, betas=(0.9,0.999))
-
+optim = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, nesterov=True)
+scheduler = lr_scheduler.MultiStepLR(optim, milestones=[20, 35, 45], gamma=0.1)
+model.train()
 #model.classifier.classifier = nn.Sequential()
 for epoch in range(MAX_EPOCH):
     #st = time.time()
+    scheduler.step()
     for idx, (data, target) in enumerate(dataloader):
-        data, target = data.cuda(), target.cuda()
-        result = model(data)
+        data, target = data.to(device), target.to(device)
+        result = model(data, target)
         loss = loss_fn(result,target)
-        prediction = result.argmax(1)
-        precision = torch.sum(prediction==target)/float(BATCH_SIZE)
-        if idx%100==0:
-            print('iteration %s:'%idx,end=' ')
+        _, prediction = torch.max(result, 1)
+        precision = torch.mean((prediction==target).float())
+        if idx%1==0:
+            print('epoch %s iteration %s/%s:'%(epoch+1,idx,len(dataloader)),end=' ')
             print('loss=%.3f, precision=%.6f'%(loss.item(), precision.item()))
         optim.zero_grad()
         loss.backward()
         optim.step()
-        if idx % 1000 == 0:
-            save_path = './snapshot/model_iteration_%s.pth'%idx
+        if idx % 400 == 0:
+            save_path = './snapshot/epoch_%s_iteration_%s.pth'%(epoch+1,idx)
             torch.save(model.state_dict(), save_path)
     #ed = time.time()
     #print('One traversal over the dataset takes %.4f secs.'%(ed-st))
