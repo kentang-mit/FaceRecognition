@@ -13,7 +13,7 @@ normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
 
 
 transform = transforms.Compose([
-        transforms.Resize((128,128)),
+        transforms.Resize((112,112)),
         transforms.ToTensor(),
         normalize,
     ])
@@ -52,11 +52,11 @@ for epoch in range(MAX_EPOCH):
         data, target = data.cuda(), target.cuda()
         result = model(data)
         loss = loss_fn(result,target)
-        prediction = result.max(1)
-        precision = torch.sum(result==target)/float(BATCH_SIZE)
+        prediction = result.argmax(1)
+        precision = torch.sum(prediction==target)/float(BATCH_SIZE)
         if idx%100==0:
             print('iteration %s:'%idx,end=' ')
-            print('loss=%.3f, precision=%.6f'%loss.item(), precision.item())
+            print('loss=%.3f, precision=%.6f'%(loss.item(), precision.item()))
         optim.zero_grad()
         loss.backward()
         optim.step()
