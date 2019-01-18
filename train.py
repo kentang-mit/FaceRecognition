@@ -7,13 +7,15 @@ from models.resnet import *
 from torchvision.datasets import ImageFolder
 import time
 from torch.optim import lr_scheduler
+from eval_lfw import evaluationAPI
 
-normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                std=[0.229, 0.224, 0.225])
+normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5],
+                                std=[0.5, 0.5, 0.5])
 
 
 transform = transforms.Compose([
         transforms.Resize((112,112)),
+        transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         normalize,
     ])
@@ -26,12 +28,12 @@ val_transform = transforms.Compose([
     ])
 '''
 
-MAX_EPOCH = 20
+MAX_EPOCH = 50
 BATCH_SIZE = 512
 NUM_CLASSES = 10575
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-data_dir = '/home/kentang/casia-maxpy-clean/CASIA-maxpy-clean/imgs'
+data_dir = '/data2/datasets/CASIA/imgs'
 loss_fn = nn.CrossEntropyLoss().to(device)
 dataset = datasets.ImageFolder(data_dir, transform=transform)
 
@@ -51,6 +53,8 @@ scheduler = lr_scheduler.MultiStepLR(optim, milestones=[20, 35, 45], gamma=0.1)
 model.train()
 #model.classifier.classifier = nn.Sequential()
 for epoch in range(MAX_EPOCH):
+    if epoch > 0:
+        evaluationAPI(epoch)
     #st = time.time()
     scheduler.step()
     for idx, (data, target) in enumerate(dataloader):
@@ -66,7 +70,7 @@ for epoch in range(MAX_EPOCH):
         loss.backward()
         optim.step()
         if idx % 400 == 0:
-            save_path = './snapshot/epoch_%s_iteration_%s.pth'%(epoch+1,idx)
+            save_path = '/data2/snapshot/epoch_%s_iteration_%s.pth'%(epoch+1,idx)
             torch.save(model.state_dict(), save_path)
     #ed = time.time()
     #print('One traversal over the dataset takes %.4f secs.'%(ed-st))

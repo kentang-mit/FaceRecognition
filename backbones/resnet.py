@@ -1,33 +1,49 @@
+import torch
 import torch.nn as nn
-from torch.nn import Linear, Conv2d, BatchNorm1d, BatchNorm2d, ReLU, Dropout, MaxPool2d, Sequential, Module
+
+def ResNet18():
+    model = ResNet(BasicBlock, [2, 2, 2, 2])
+    return model
+
+def ResNet34():
+    model = ResNet(BasicBlock, [3, 4, 6, 3])
+    return model
+
+def ResNet50():
+    model = ResNet(Bottleneck, [3, 4, 6, 3])
+    return model
+
+def ResNet101():
+    model = ResNet(Bottleneck, [3, 4, 23, 3])
+    return model
+
+def ResNet152():
+    model = ResNet(Bottleneck, [3, 8, 36, 3])
+    return model
+
+__all__ = ['ResNet', 'ResNet18', 'ResNet34', 'ResNet50', 'ResNet101', 'ResNet152']
 
 
-# Support: ['ResNet_50', 'ResNet_101', 'ResNet_152']
-
-
-def conv3x3(in_planes, out_planes, stride = 1):
+def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
-
-    return Conv2d(in_planes, out_planes, kernel_size = 3, stride = stride,
-                     padding = 1, bias = False)
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
 
 
-def conv1x1(in_planes, out_planes, stride = 1):
+def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
+    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
-    return Conv2d(in_planes, out_planes, kernel_size = 1, stride = stride, bias = False)
 
-
-class BasicBlock(Module):
+class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride = 1, downsample = None):
+    def __init__(self, inplanes, planes, stride=1, downsample=None):
         super(BasicBlock, self).__init__()
-        self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = BatchNorm2d(planes)
-        self.relu = ReLU(inplace = True)
-        self.conv2 = conv3x3(planes, planes)
-        self.bn2 = BatchNorm2d(planes)
+        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
         self.downsample = downsample
         self.stride = stride
 
@@ -37,7 +53,6 @@ class BasicBlock(Module):
         out = self.conv1(x)
         out = self.bn1(out)
         out = self.relu(out)
-
         out = self.conv2(out)
         out = self.bn2(out)
 
@@ -50,18 +65,17 @@ class BasicBlock(Module):
         return out
 
 
-class Bottleneck(Module):
+class Bottleneck(nn.Module):
     expansion = 4
-
-    def __init__(self, inplanes, planes, stride = 1, downsample = None):
+    def __init__(self, inplanes, planes, stride=1, downsample=None):
         super(Bottleneck, self).__init__()
-        self.conv1 = conv1x1(inplanes, planes)
-        self.bn1 = BatchNorm2d(planes)
-        self.conv2 = conv3x3(planes, planes, stride)
-        self.bn2 = BatchNorm2d(planes)
-        self.conv3 = conv1x1(planes, planes * self.expansion)
-        self.bn3 = BatchNorm2d(planes * self.expansion)
-        self.relu = ReLU(inplace = True)
+        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, stride=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
+        self.conv3 = nn.Conv2d(planes, planes * self.expansion, kernel_size=1, stride=1, bias=False)
+        self.bn3 = nn.BatchNorm2d(planes * self.expansion)
+        self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
 
@@ -88,33 +102,35 @@ class Bottleneck(Module):
         return out
 
 
-class ResNet(Module):
+class Flatten(nn.Module):
+    def forward(self, input):
+        return input.view(input.size(0), -1)
 
-    def __init__(self, input_size, block, layers, zero_init_residual = True):
+
+class ResNet(nn.Module):
+
+    def __init__(self, block, layers, feature_dim=512, drop_ratio=0.4, zero_init_residual=False):
         super(ResNet, self).__init__()
-        assert input_size[0] in [112, 224], "input_size should be [112, 112] or [224, 224]"
         self.inplanes = 64
-        self.conv1 = Conv2d(3, 64, kernel_size = 7, stride = 2, padding = 3, bias = False)
-        self.bn1 = BatchNorm2d(64)
-        self.relu = ReLU(inplace = True)
-        self.maxpool = MaxPool2d(kernel_size = 3, stride = 2, padding = 1)
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride = 2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride = 2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride = 2)
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
 
-        self.bn_o1 = BatchNorm2d(2048)
-        self.dropout = Dropout()
-        if input_size[0] == 112:
-            self.fc = Linear(2048 * 4 * 4, 512)
-        else:
-            self.fc = Linear(2048 * 8 * 8, 512)
-        self.bn_o2 = BatchNorm1d(512)
+        self.output_layer = nn.Sequential(nn.BatchNorm2d(512 * block.expansion),
+                                          nn.Dropout(drop_ratio),
+                                          Flatten(),
+                                          nn.Linear(512 * block.expansion * 7 * 7, feature_dim),
+                                          nn.BatchNorm1d(feature_dim))
 
         for m in self.modules():
-            if isinstance(m, Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode = 'fan_out', nonlinearity = 'relu')
-            elif isinstance(m, BatchNorm2d):
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
@@ -128,12 +144,12 @@ class ResNet(Module):
                 elif isinstance(m, BasicBlock):
                     nn.init.constant_(m.bn2.weight, 0)
 
-    def _make_layer(self, block, planes, blocks, stride = 1):
+    def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
-            downsample = Sequential(
+            downsample = nn.Sequential(
                 conv1x1(self.inplanes, planes * block.expansion, stride),
-                BatchNorm2d(planes * block.expansion),
+                nn.BatchNorm2d(planes * block.expansion),
             )
 
         layers = []
@@ -142,7 +158,7 @@ class ResNet(Module):
         for _ in range(1, blocks):
             layers.append(block(self.inplanes, planes))
 
-        return Sequential(*layers)
+        return nn.Sequential(*layers)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -155,34 +171,16 @@ class ResNet(Module):
         x = self.layer3(x)
         x = self.layer4(x)
 
-        x = self.bn_o1(x)
-        x = self.dropout(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
-        x = self.bn_o2(x)
+        x = self.output_layer(x)
 
         return x
 
 
-def ResNet_50(input_size, **kwargs):
-    """Constructs a ResNet-50 model.
-    """
-    model = ResNet(input_size, Bottleneck, [3, 4, 6, 3], **kwargs)
+if __name__ == "__main__":
+    device = "cuda"
+    input = torch.Tensor(2, 3, 112, 112).to(device)
+    net = ResNet50().to(device)
+    print(net)
 
-    return model
-
-
-def ResNet_101(input_size, **kwargs):
-    """Constructs a ResNet-101 model.
-    """
-    model = ResNet(input_size, Bottleneck, [3, 4, 23, 3], **kwargs)
-
-    return model
-
-
-def ResNet_152(input_size, **kwargs):
-    """Constructs a ResNet-152 model.
-    """
-    model = ResNet(input_size, Bottleneck, [3, 8, 36, 3], **kwargs)
-
-    return model
+    x = net(input)
+    print(x.shape)
